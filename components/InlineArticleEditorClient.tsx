@@ -20,6 +20,7 @@ export function InlineArticleEditorClient(props: {
   publishedAt?: number
   viewCount?: number
   content?: string
+  onExitReading?: () => void
 }) {
   return <InlineArticleEditor {...props} />
 }

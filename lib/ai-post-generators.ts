@@ -26,16 +26,18 @@ import {
 import {
   buildPlainRetryInstruction,
   buildFallbackSummary,
-  extractGeneratedTags,
   extractGeneratedText,
   getWorkersAiAssistantPayload,
   extractWorkersAiText,
   getExternalAssistantPayload,
-  normalizeGeneratedSlug,
   normalizeSummary,
   parseJsonValue,
   shouldRetryAssistantPayload,
 } from '@/lib/ai-post-generator/parsers'
+import {
+  resolveGeneratedSlug,
+  resolveGeneratedTags,
+} from '@/lib/ai-post-generator/metadata-fallbacks'
 import {
   buildAssetUrls,
   buildContextBlock,
@@ -97,7 +99,7 @@ async function runTextGenerator(
   config: TextRuntime,
   messages: Array<{ role: 'system' | 'user'; content: string }>,
   target: Exclude<AiPostGeneratorTarget, 'cover'>,
-) {
+): Promise<{ text: string; reasoningText: string }> {
   const retryMessages = messages.map((message, index) => (
     index === 0 && message.role === 'system'
       ? {
@@ -120,7 +122,12 @@ async function runTextGenerator(
       ...requestOptions,
     })
     const primary = getWorkersAiAssistantPayload(result)
-    if (primary.content) return primary.content
+    if (primary.content) {
+      return {
+        text: primary.content,
+        reasoningText: primary.reasoning,
+      }
+    }
 
     if (shouldRetryAssistantPayload(primary)) {
       const retry = await config.binding.run(config.model, {
@@ -130,11 +137,22 @@ async function runTextGenerator(
       })
       const retryPayload = getWorkersAiAssistantPayload(retry)
       if (retryPayload.content) {
-        return retryPayload.content
+        return {
+          text: retryPayload.content,
+          reasoningText: retryPayload.reasoning || primary.reasoning,
+        }
+      }
+
+      return {
+        text: extractWorkersAiText(retry),
+        reasoningText: retryPayload.reasoning || primary.reasoning,
       }
     }
 
-    return extractWorkersAiText(result)
+    return {
+      text: extractWorkersAiText(result),
+      reasoningText: primary.reasoning,
+    }
   }
 
   if (isWorkersAiBaseUrl(config.baseURL)) {
@@ -198,7 +216,10 @@ async function runTextGenerator(
     const payload = await runCompatRequest(messages, config.maxTokens)
     const primary = getWorkersAiAssistantPayload(payload)
     if (primary.content) {
-      return primary.content
+      return {
+        text: primary.content,
+        reasoningText: primary.reasoning,
+      }
     }
 
     if (shouldRetryAssistantPayload(primary)) {
@@ -208,11 +229,22 @@ async function runTextGenerator(
       )
       const retried = getWorkersAiAssistantPayload(retryPayload)
       if (retried.content) {
-        return retried.content
+        return {
+          text: retried.content,
+          reasoningText: retried.reasoning || primary.reasoning,
+        }
+      }
+
+      return {
+        text: extractWorkersAiText(retryPayload),
+        reasoningText: retried.reasoning || primary.reasoning,
       }
     }
 
-    return extractWorkersAiText(payload)
+    return {
+      text: extractWorkersAiText(payload),
+      reasoningText: primary.reasoning,
+    }
   }
 
   const client = new OpenAI({
@@ -237,7 +269,10 @@ async function runTextGenerator(
 
   const primary = getExternalAssistantPayload(response)
   if (primary.content) {
-    return primary.content
+    return {
+      text: primary.content,
+      reasoningText: primary.reasoning,
+    }
   }
 
   if (primary.reasoning || primary.finishReason === 'length') {
@@ -251,11 +286,22 @@ async function runTextGenerator(
 
     const retryPayload = getExternalAssistantPayload(retry)
     if (retryPayload.content) {
-      return retryPayload.content
+      return {
+        text: retryPayload.content,
+        reasoningText: retryPayload.reasoning || primary.reasoning,
+      }
+    }
+
+    return {
+      text: '',
+      reasoningText: retryPayload.reasoning || primary.reasoning,
     }
   }
 
-  return ''
+  return {
+    text: '',
+    reasoningText: primary.reasoning,
+  }
 }
 
 async function resolveWorkersAiProfile(
@@ -363,7 +409,7 @@ export async function generatePostMetadata(
   const fallbackSummary = buildFallbackSummary(input.title || '', input.content || '')
   const runtime = await resolveTextRuntime(generator, input.env, input.db)
   const contextBlock = buildContextBlock(input, input.target)
-  const resultText = await runTextGenerator(runtime, [
+  const generation = await runTextGenerator(runtime, [
     {
       role: 'system',
       content: buildTextSystemPrompt(input.target, generator.prompt),
@@ -373,6 +419,7 @@ export async function generatePostMetadata(
       content: contextBlock,
     },
   ], input.target)
+  const resultText = generation.text
 
   const parsed = parseJsonValue(resultText)
 
@@ -390,17 +437,32 @@ export async function generatePostMetadata(
   if (input.target === 'tags') {
     return {
       target: input.target,
-      value: extractGeneratedTags(parsed, resultText),
+      value: resolveGeneratedTags({
+        title: input.title,
+        content: input.content,
+        category: input.category,
+        description: input.description,
+        tags: input.tags,
+        currentSlug: input.currentSlug,
+        resultText,
+        reasoningText: generation.reasoningText,
+      }),
       generator,
     }
   }
 
   return {
     target: input.target,
-    value: normalizeGeneratedSlug(
-      extractGeneratedText(parsed, resultText, ['slug', 'text', 'result', 'content']),
-      input.title || '',
-    ),
+    value: resolveGeneratedSlug({
+      title: input.title,
+      content: input.content,
+      category: input.category,
+      description: input.description,
+      tags: input.tags,
+      currentSlug: input.currentSlug,
+      resultText,
+      reasoningText: generation.reasoningText,
+    }),
     generator,
   }
 }

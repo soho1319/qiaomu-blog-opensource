@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import { ImageIcon, WandSparkles } from 'lucide-react'
 import {
@@ -48,9 +49,21 @@ interface InlineArticleEditorProps {
   publishedAt?: number    // unix timestamp
   viewCount?: number
   content?: string        // plain text, for reading time
+  onExitReading?: () => void
 }
 
-export function InlineArticleEditor({ slug, title: initialTitle, html, category, coverImage: initialCoverImage, password, publishedAt, viewCount, content }: InlineArticleEditorProps) {
+export function InlineArticleEditor({
+  slug,
+  title: initialTitle,
+  html,
+  category,
+  coverImage: initialCoverImage,
+  password,
+  publishedAt,
+  viewCount,
+  content,
+  onExitReading,
+}: InlineArticleEditorProps) {
   const editorRef = useRef<EditorInstance | null>(null)
   const titleRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -357,6 +370,23 @@ export function InlineArticleEditor({ slug, title: initialTitle, html, category,
 
       {/* 右上角固顶状态栏：字数 + 保存 */}
       <div className="fixed top-16 right-4 sm:right-6 z-50 flex items-center gap-2 rounded-lg border border-[var(--editor-line)] bg-[var(--editor-panel)] backdrop-blur px-3 py-2 shadow-lg text-xs">
+        {onExitReading ? (
+          <>
+            <button
+              type="button"
+              onClick={onExitReading}
+              className="px-2 py-1 rounded-md border border-[var(--editor-line)] text-[var(--editor-ink)] hover:bg-[var(--editor-soft)] transition"
+            >
+              阅读
+            </button>
+            <Link
+              href="/admin"
+              className="px-2 py-1 rounded-md border border-[var(--editor-line)] text-[var(--editor-ink)] hover:bg-[var(--editor-soft)] transition"
+            >
+              后台
+            </Link>
+          </>
+        ) : null}
         {charCount > 0 && (
           <span className="tabular-nums text-[var(--stone-gray)]">
             {charCount.toLocaleString()} 字

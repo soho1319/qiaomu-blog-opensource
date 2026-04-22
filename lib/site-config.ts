@@ -1,5 +1,5 @@
 const DEV_SITE_URL = 'http://localhost:3000'
-const DEFAULT_PRODUCTION_SITE_URL = 'https://your-domain.com'
+const DEFAULT_PRODUCTION_SITE_URL = 'https://blog.qiaomu.ai'
 
 function parseSiteUrl(value: string): URL | null {
   try {

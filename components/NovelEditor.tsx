@@ -1376,6 +1376,7 @@ export function NovelEditor({ initialData }: NovelEditorProps = {}) {
         allowReplace
         defaultPlacementMode="replace"
         closeOnGenerate={false}
+        generationMode="foreground"
         onClose={() => setReferenceImageTarget(null)}
         onInsert={(imageUrl, alt, placementMode) => {
           if (!referenceImageTarget) return

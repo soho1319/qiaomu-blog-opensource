@@ -34,8 +34,8 @@ function TerminalHeader({
   navLinks: SiteNavLink[]
 }) {
   const defaultLinks = [
-    { label: '~/github', url: 'https://github.com/joeseesun/qiaomu-blog-opensource', openInNewTab: true },
-    { label: '~/admin', url: '/admin', openInNewTab: false },
+    { label: '~/github', url: 'https://github.com/joeseesun/', openInNewTab: true },
+    { label: '~/twitter', url: 'https://x.com/vista8/', openInNewTab: true },
     { label: '~/rss', url: '/feed.xml', openInNewTab: false },
   ]
   const links = navLinks.length > 0

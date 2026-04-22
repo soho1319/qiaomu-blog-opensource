@@ -9,7 +9,6 @@ import {
   History,
   Image as ImageIcon,
   Loader2,
-  Search,
   Sparkles,
   X,
 } from 'lucide-react'
@@ -71,54 +70,9 @@ interface ImageHistoryItem {
   createdAt: number
 }
 
-const MAX_HISTORY_ITEMS = 100
+const MAX_HISTORY_ITEMS = 12
 const DEFAULT_HISTORY_SCOPE = 'default'
 const TEMPLATE_COLLAPSED_HEIGHT = 84
-
-function HistoryContextPreview({ text }: { text: string }) {
-  const content = text.trim() || '来自最近生成'
-  const textRef = useRef<HTMLDivElement>(null)
-  const [expanded, setExpanded] = useState(false)
-  const [hasOverflow, setHasOverflow] = useState(false)
-  const canExpand = expanded || hasOverflow
-
-  useEffect(() => {
-    if (expanded) return
-
-    const measure = () => {
-      const node = textRef.current
-      if (!node) return
-      setHasOverflow(node.scrollHeight > node.clientHeight + 1)
-    }
-
-    const frame = window.requestAnimationFrame(measure)
-    return () => window.cancelAnimationFrame(frame)
-  }, [content, expanded])
-
-  return (
-    <div className="flex min-h-[4.75rem] flex-col">
-      <div
-        ref={textRef}
-        className={`text-[11px] leading-5 text-[var(--editor-muted)] ${
-          expanded ? '' : 'line-clamp-3'
-        }`}
-      >
-        {content}
-      </div>
-      <div className="mt-1 min-h-4">
-        {canExpand ? (
-          <button
-            type="button"
-            onClick={() => setExpanded((value) => !value)}
-            className="text-[11px] font-medium text-[var(--editor-muted)] transition hover:text-[var(--editor-ink)]"
-          >
-            {expanded ? '收起' : '展开'}
-          </button>
-        ) : null}
-      </div>
-    </div>
-  )
-}
 
 function createHistoryStorageKey(scope: string) {
   return `qmblog:ai-image-history:${scope || DEFAULT_HISTORY_SCOPE}`
@@ -184,7 +138,6 @@ export function ImageGenerationModal({
   const [placementMode, setPlacementMode] = useState<'insert' | 'replace'>(defaultPlacementMode)
   const [templatesExpanded, setTemplatesExpanded] = useState(false)
   const [templatesOverflowing, setTemplatesOverflowing] = useState(false)
-  const [historyQuery, setHistoryQuery] = useState('')
 
   const historyStorageKey = useMemo(
     () => createHistoryStorageKey(historyScope),
@@ -214,25 +167,6 @@ export function ImageGenerationModal({
   }, [profiles])
 
   const canGenerate = Boolean(prompt.trim() || contextText.trim())
-  const normalizedHistoryQuery = historyQuery.trim().toLowerCase()
-
-  const filteredHistoryItems = useMemo(() => {
-    if (!normalizedHistoryQuery) return historyItems
-
-    return historyItems.filter((item) => {
-      const searchTarget = [
-        item.promptLabel,
-        item.contextPreview,
-        item.image.revisedPrompt,
-        item.image.alt,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-
-      return searchTarget.includes(normalizedHistoryQuery)
-    })
-  }, [historyItems, normalizedHistoryQuery])
 
   const syncHistoryItems = useCallback(() => {
     setHistoryItems(readStoredHistory<ImageHistoryItem>(historyStorageKey).slice(0, MAX_HISTORY_ITEMS))
@@ -348,7 +282,6 @@ export function ImageGenerationModal({
       setSelectedResolution('2k')
       setPlacementMode(defaultPlacementMode)
       setTemplatesExpanded(false)
-      setHistoryQuery('')
     })
     const timer = window.setTimeout(() => promptRef.current?.focus(), 50)
 
@@ -450,8 +383,6 @@ export function ImageGenerationModal({
 
       startBackgroundTask({
         toast,
-        startedMessage: '已开始生成，可关闭窗口，稍后可在最近生成中查看',
-        successMessage: '图片生成完成，可在最近生成中查看',
         errorPrefix: '图片生成失败',
         run: requestImage,
         onSuccess: (image) => {
@@ -735,75 +666,53 @@ export function ImageGenerationModal({
                   ) : null}
                 </div>
 
-                {historyOpen && historyItems.length > 0 ? (
-                  <div className="border-b border-[var(--editor-line)] px-5 py-3">
-                    <div className="relative">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--editor-muted)]" />
-                      <input
-                        type="search"
-                        value={historyQuery}
-                        onChange={(event) => setHistoryQuery(event.target.value)}
-                        placeholder="搜索提示词或生成文本"
-                        className="w-full rounded-xl border border-[var(--editor-line)] bg-white py-2 pl-9 pr-3 text-sm text-[var(--editor-ink)] outline-none focus:border-[var(--editor-accent)]"
-                      />
-                    </div>
-                  </div>
-                ) : null}
-
                 <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
                   {historyOpen && historyItems.length > 0 ? (
-                    filteredHistoryItems.length > 0 ? (
-                      <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
-                        {filteredHistoryItems.map((item) => {
-                          const previewUrl = item.image.variants?.content || item.image.url
-                          return (
-                            <div key={item.id} className="flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--editor-line)] bg-white">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setResult(item.image)
-                                  setHistoryOpen(false)
-                                  setShowRevisedPrompt(false)
-                                }}
-                                className="block w-full"
-                              >
-                                <img
-                                  src={previewUrl}
-                                  alt={item.image.alt}
-                                  loading="lazy"
-                                  className="aspect-[4/3] w-full object-cover"
-                                />
-                              </button>
-                              <div className="flex flex-1 flex-col px-3 py-3">
-                                <div className="min-h-[2.5rem] text-sm font-medium leading-5 text-[var(--editor-ink)] line-clamp-2">
-                                  {item.promptLabel}
-                                </div>
-                                <div className="mt-2">
-                                  <HistoryContextPreview text={item.contextPreview} />
-                                </div>
-                                <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-                                  <span className="text-[11px] text-[var(--editor-muted)]">
-                                    {formatHistoryTime(item.createdAt)}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => onInsert(item.image.url, item.image.alt, placementMode)}
-                                    className="inline-flex items-center gap-1 rounded-lg border border-[var(--editor-line)] px-2.5 py-1.5 text-xs font-medium text-[var(--editor-ink)] transition hover:bg-[var(--editor-soft)]"
-                                  >
-                                    <Check className="h-3.5 w-3.5" />
-                                    {placementMode === 'replace' ? '替换' : '插入'}
-                                  </button>
-                                </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {historyItems.map((item) => {
+                        const previewUrl = item.image.variants?.content || item.image.url
+                        return (
+                          <div key={item.id} className="overflow-hidden rounded-2xl border border-[var(--editor-line)] bg-white">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setResult(item.image)
+                                setHistoryOpen(false)
+                                setShowRevisedPrompt(false)
+                              }}
+                              className="block w-full"
+                            >
+                              <img
+                                src={previewUrl}
+                                alt={item.image.alt}
+                                className="aspect-[4/3] w-full object-cover"
+                              />
+                            </button>
+                            <div className="space-y-2 px-3 py-3">
+                              <div className="line-clamp-2 text-sm font-medium text-[var(--editor-ink)]">
+                                {item.promptLabel}
+                              </div>
+                              <div className="text-[11px] leading-5 text-[var(--editor-muted)]">
+                                {item.contextPreview || '来自最近生成'}
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] text-[var(--editor-muted)]">
+                                  {formatHistoryTime(item.createdAt)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => onInsert(item.image.url, item.image.alt, placementMode)}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-[var(--editor-line)] px-2.5 py-1.5 text-xs font-medium text-[var(--editor-ink)] transition hover:bg-[var(--editor-soft)]"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  {placementMode === 'replace' ? '替换' : '插入'}
+                                </button>
                               </div>
                             </div>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-[var(--editor-line)]/70 bg-white/35 px-6 text-center text-sm text-[var(--editor-muted)]">
-                        没有匹配的最近生成
-                      </div>
-                    )
+                          </div>
+                        )
+                      })}
+                    </div>
                   ) : generating ? (
                     <div className="flex h-full min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-[var(--editor-line)] bg-[var(--editor-soft)] text-sm text-[var(--editor-muted)]">
                       <div className="flex items-center gap-2">

@@ -1,7 +1,6 @@
 'use client'
 
-import Link from 'next/link'
-import { useState, type ReactNode } from 'react'
+import { useCallback, useState, type MouseEvent, type ReactNode } from 'react'
 import { InlineArticleEditorClient } from '@/components/InlineArticleEditorClient'
 import { useAdminSession } from '@/lib/admin-session-client'
 
@@ -33,30 +32,25 @@ export function FrontPostAdminBoundary({
   const { authenticated } = useAdminSession()
   const [editing, setEditing] = useState(false)
 
+  const handleReadModeClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if (!authenticated || editing) return
+    if (event.defaultPrevented || event.button !== 0) return
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+
+    const target = event.target
+    if (!(target instanceof HTMLElement)) return
+    if (target.closest('a, button, input, textarea, select, summary, label, video, audio')) return
+
+    const trigger = target.closest<HTMLElement>('[data-admin-edit-trigger]')
+    if (!trigger) return
+
+    event.preventDefault()
+    setEditing(true)
+  }, [authenticated, editing])
+
   if (authenticated && editing) {
     return (
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--editor-line)] bg-[var(--editor-panel)] px-4 py-3">
-          <div>
-            <p className="text-sm font-medium text-[var(--editor-ink)]">管理员编辑模式</p>
-            <p className="text-xs text-[var(--editor-muted)]">当前修改只对你自己加载，不影响公开页缓存。</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              className="rounded-lg border border-[var(--editor-line)] px-3 py-2 text-sm text-[var(--editor-muted)] transition hover:bg-[var(--editor-soft)] hover:text-[var(--editor-ink)]"
-            >
-              返回阅读
-            </button>
-            <Link
-              href="/admin"
-              className="rounded-lg bg-[var(--editor-accent)] px-3 py-2 text-sm font-medium text-white transition hover:brightness-105"
-            >
-              后台管理
-            </Link>
-          </div>
-        </div>
+      <section>
         <InlineArticleEditorClient
           slug={slug}
           title={title}
@@ -67,37 +61,18 @@ export function FrontPostAdminBoundary({
           publishedAt={publishedAt}
           viewCount={viewCount}
           content={content}
+          onExitReading={() => setEditing(false)}
         />
       </section>
     )
   }
 
   return (
-    <>
-      {authenticated ? (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--editor-line)] bg-[var(--editor-panel)] px-4 py-3">
-          <div>
-            <p className="text-sm font-medium text-[var(--editor-ink)]">管理员已登录</p>
-            <p className="text-xs text-[var(--editor-muted)]">需要修改本文时再加载编辑器，普通阅读保持公开页最快路径。</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="rounded-lg bg-[var(--editor-accent)] px-3 py-2 text-sm font-medium text-white transition hover:brightness-105"
-            >
-              编辑本文
-            </button>
-            <Link
-              href={`/editor?edit=${encodeURIComponent(slug)}`}
-              className="rounded-lg border border-[var(--editor-line)] px-3 py-2 text-sm text-[var(--editor-muted)] transition hover:bg-[var(--editor-soft)] hover:text-[var(--editor-ink)]"
-            >
-              完整编辑器
-            </Link>
-          </div>
-        </div>
-      ) : null}
+    <div
+      onClickCapture={handleReadModeClick}
+      data-admin-inline-entry={authenticated ? 'true' : undefined}
+    >
       {children}
-    </>
+    </div>
   )
 }

@@ -54,15 +54,13 @@ export function SiteFooter() {
         <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 flex items-center justify-center gap-2 text-xs text-[var(--stone-gray)]">
           <span>© 2026</span>
           <span>·</span>
-          <span>乔木博客</span>
-          <span>·</span>
           {isAdmin ? (
             <>
               <Link
                 href="/admin"
                 className="hover:text-[var(--editor-ink)] transition-colors duration-150 underline-offset-2 hover:underline"
               >
-                管理后台
+                向阳乔木
               </Link>
               <span>·</span>
               <Link
@@ -83,7 +81,7 @@ export function SiteFooter() {
               onClick={() => setOpen(true)}
               className="hover:text-[var(--editor-ink)] transition-colors duration-150 underline-offset-2 hover:underline"
             >
-              管理后台
+              向阳乔木
             </button>
           )}
         </div>

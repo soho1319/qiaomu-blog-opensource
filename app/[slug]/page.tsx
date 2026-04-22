@@ -8,6 +8,7 @@ import { SiteFooter } from '@/components/SiteFooter'
 import { FrontPostAdminBoundary } from '@/components/FrontPostAdminBoundary'
 import { PasswordPrompt } from '@/components/PasswordPrompt'
 import { DownloadMarkdown } from '@/components/DownloadMarkdown'
+import { TwitterEmbedsEnhancer } from '@/components/TwitterEmbedsEnhancer'
 import { getSiteHeaderData } from '@/lib/site'
 import { getRelatedPosts } from '@/lib/related-content'
 import { getPublicContentCacheNamespace } from '@/lib/cache'
@@ -47,7 +48,7 @@ export async function generateMetadata({
     return {
       title: post.title,
       description: post.description,
-      authors: [{ name: '乔木博客' }],
+      authors: [{ name: '向阳乔木' }],
       alternates: {
         canonical: `${baseUrl}/${post.slug}`,
       },
@@ -57,11 +58,13 @@ export async function generateMetadata({
         type: 'article',
         publishedTime: new Date(post.published_at * 1000).toISOString(),
         modifiedTime: new Date(post.updated_at * 1000).toISOString(),
-        authors: ['乔木博客'],
+        authors: ['向阳乔木'],
         images: [{ url: ogImage }],
       },
       twitter: {
         card: 'summary_large_image' as const,
+        site: '@vista8',
+        creator: '@vista8',
         title: post.title,
         description: post.description || undefined,
         images: [ogImage],
@@ -176,6 +179,7 @@ export default async function PostPage({
   const related = !post.password
     ? await getRelatedPosts(db, env, post, 3).catch(() => ({ strategy: 'fts' as const, source: 'rules' as const, results: [] }))
     : { strategy: 'fts' as const, source: 'rules' as const, results: [] }
+  const contentContainerId = `post-content-${post.slug}`
 
   return (
     <div className="min-h-screen bg-[var(--background)] flex flex-col">
@@ -198,7 +202,7 @@ export default async function PostPage({
             headline: post.title,
             description: post.description || '',
             image: ogImage,
-            author: { '@type': 'Organization', name: '乔木博客', url: baseUrl },
+            author: { '@type': 'Person', name: '向阳乔木', url: 'https://x.com/vista8' },
             publisher: { '@type': 'Organization', name: '乔木博客', url: baseUrl, logo: { '@type': 'ImageObject', url: `${baseUrl}/icon-512.png` } },
             datePublished: new Date(post.published_at * 1000).toISOString(),
             dateModified: new Date(post.updated_at * 1000).toISOString(),
@@ -237,6 +241,7 @@ export default async function PostPage({
           <article>
             <header className="mb-10 sm:mb-12">
               <h1
+                data-admin-edit-trigger
                 className="article-display-title text-2xl sm:text-3xl lg:text-4xl font-bold text-[var(--editor-ink)] leading-snug mb-4 sm:mb-5"
               >
                 {post.title}
@@ -274,7 +279,13 @@ export default async function PostPage({
               </div>
             </header>
 
-            <div className="rich-content" dangerouslySetInnerHTML={{ __html: post.html }} />
+            <div
+              id={contentContainerId}
+              data-admin-edit-trigger
+              className="rich-content"
+              dangerouslySetInnerHTML={{ __html: post.html }}
+            />
+            <TwitterEmbedsEnhancer containerId={contentContainerId} html={post.html} />
 
             {related.results.length > 0 && (
               <section className="mt-14 sm:mt-16 border-t border-[var(--editor-line)] pt-8 sm:pt-10">

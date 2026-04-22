@@ -76,6 +76,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary',
+    site: '@vista8',
+    creator: '@vista8',
     title: '乔木博客',
     description: '记录思考，分享所学，留住当下。技术、生活、读书笔记的数字花园。',
     images: ['/icon-512.png'],

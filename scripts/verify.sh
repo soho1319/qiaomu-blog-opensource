@@ -17,12 +17,12 @@ npm run lint
 echo "==> npm run test:run"
 npm run test:run
 
-echo "==> npm run build"
-npm run build
-
 if [[ "${MODE}" == "full" ]]; then
-  echo "==> npx opennextjs-cloudflare build"
-  npx opennextjs-cloudflare build
+  echo "==> npx @opennextjs/cloudflare@latest build"
+  npx @opennextjs/cloudflare@latest build
+else
+  echo "==> npm run build"
+  npm run build
 fi
 
 echo "Verification complete (${MODE})."

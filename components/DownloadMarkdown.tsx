@@ -2,6 +2,40 @@
 
 import TurndownService from 'turndown'
 
+const URL_ATTRIBUTES = [
+  ['img', 'src'],
+  ['a', 'href'],
+  ['audio', 'src'],
+  ['video', 'src'],
+  ['source', 'src'],
+] as const
+
+function shouldRewriteUrl(value: string) {
+  if (!value) return false
+  const trimmed = value.trim()
+
+  if (!trimmed || trimmed.startsWith('#')) return false
+  if (/^(?:[a-z]+:|\/\/)/i.test(trimmed)) return false
+
+  return true
+}
+
+function absolutizeHtmlUrls(html: string) {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(html, 'text/html')
+  const baseUrl = window.location.origin
+
+  for (const [selector, attribute] of URL_ATTRIBUTES) {
+    for (const element of doc.querySelectorAll<HTMLElement>(selector)) {
+      const value = element.getAttribute(attribute)
+      if (!value || !shouldRewriteUrl(value)) continue
+      element.setAttribute(attribute, new URL(value, baseUrl).toString())
+    }
+  }
+
+  return doc.body.innerHTML
+}
+
 export function DownloadMarkdown({ title, html }: { title: string; html: string }) {
   const handleDownload = () => {
     const td = new TurndownService({
@@ -9,8 +43,9 @@ export function DownloadMarkdown({ title, html }: { title: string; html: string 
       bulletListMarker: '-',
       codeBlockStyle: 'fenced',
     })
+    const normalizedHtml = absolutizeHtmlUrls(html)
     // 保留图片标签（turndown 默认就支持 img → ![](src)）
-    const markdown = td.turndown(html)
+    const markdown = td.turndown(normalizedHtml)
     const blob = new Blob([`# ${title}\n\n${markdown}`], { type: 'text/markdown;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
