@@ -38,7 +38,7 @@ for arg in "$@"; do
   esac
 done
 
-extract_first_value() {
+section_has_key() {
   local section="$1"
   local key="$2"
   local file="$3"
@@ -48,10 +48,39 @@ extract_first_value() {
     /^\[\[/ && $0 != "[[" section "]]" { in_section = 0 }
     in_section && $1 == key {
       gsub(/"/, "", $3)
-      print $3
-      exit
+      if ($3 != "") {
+        found = 1
+        exit
+      }
+    }
+    END {
+      if (found == 1) exit 0
+      exit 1
     }
   ' "${file}"
+}
+
+strip_array_section() {
+  local section="$1"
+  local file="$2"
+  local tmp_file
+
+  tmp_file="$(mktemp)"
+
+  awk -v section="${section}" '
+    $0 == "[[" section "]]" {
+      skip = 1
+      next
+    }
+    skip && /^\[\[/ {
+      skip = 0
+    }
+    !skip {
+      print
+    }
+  ' "${file}" > "${tmp_file}"
+
+  mv "${tmp_file}" "${file}"
 }
 
 cd "${REPO_ROOT}"
@@ -70,7 +99,11 @@ fi
 
 site_url_override="${SITE_URL}" perl -0pi -e 's/NEXT_PUBLIC_SITE_URL = ".*?"/NEXT_PUBLIC_SITE_URL = "$ENV{site_url_override}"/g' "${LOCAL_CONFIG_PATH}"
 
-if ! rg -q '^\[\[d1_databases\]\]' "${LOCAL_CONFIG_PATH}"; then
+if ! section_has_key "d1_databases" "database_id" "${LOCAL_CONFIG_PATH}"; then
+  if rg -q '^\[\[d1_databases\]\]' "${LOCAL_CONFIG_PATH}"; then
+    strip_array_section "d1_databases" "${LOCAL_CONFIG_PATH}"
+  fi
+
   npx wrangler d1 create "${DB_NAME}" \
     --binding DB \
     --use-remote \
@@ -78,7 +111,11 @@ if ! rg -q '^\[\[d1_databases\]\]' "${LOCAL_CONFIG_PATH}"; then
     -c "${LOCAL_CONFIG_PATH}"
 fi
 
-if ! rg -q '^\[\[r2_buckets\]\]' "${LOCAL_CONFIG_PATH}"; then
+if ! section_has_key "r2_buckets" "bucket_name" "${LOCAL_CONFIG_PATH}"; then
+  if rg -q '^\[\[r2_buckets\]\]' "${LOCAL_CONFIG_PATH}"; then
+    strip_array_section "r2_buckets" "${LOCAL_CONFIG_PATH}"
+  fi
+
   npx wrangler r2 bucket create "${R2_NAME}" \
     --binding IMAGES \
     --update-config \
@@ -92,20 +129,13 @@ if [[ "${WITH_KV}" == "1" ]] && ! rg -q '^\[\[kv_namespaces\]\]' "${LOCAL_CONFIG
     -c "${LOCAL_CONFIG_PATH}"
 fi
 
-ACTUAL_DB_NAME="$(extract_first_value "d1_databases" "database_name" "${LOCAL_CONFIG_PATH}")"
-
-if [[ -z "${ACTUAL_DB_NAME}" ]]; then
-  echo "❌ 未能从 ${LOCAL_CONFIG_PATH} 读取 D1 配置"
-  exit 1
-fi
-
-npx wrangler d1 execute "${ACTUAL_DB_NAME}" \
+npx wrangler d1 execute DB \
   --remote \
   --file="${REPO_ROOT}/db/schema.sql" \
   -c "${LOCAL_CONFIG_PATH}"
 
 if [[ -f "${SEED_TEMPLATE_PATH}" ]]; then
-  npx wrangler d1 execute "${ACTUAL_DB_NAME}" \
+  npx wrangler d1 execute DB \
     --remote \
     --file="${SEED_TEMPLATE_PATH}" \
     -c "${LOCAL_CONFIG_PATH}"
