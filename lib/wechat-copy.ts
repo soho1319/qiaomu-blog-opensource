@@ -316,6 +316,74 @@ function buildWechatClipboardHtml(title: string, html: string) {
   }
 }
 
+type BridgeImageVariant = 'content' | 'cover'
+
+function rewriteBridgeImageUrl(input: string, variant: BridgeImageVariant) {
+  const url = new URL(input, window.location.origin)
+
+  if (url.origin === window.location.origin && url.pathname.startsWith('/api/images/')) {
+    if (variant === 'content') {
+      url.searchParams.set('w', '1280')
+      url.searchParams.set('q', '82')
+      url.searchParams.set('format', 'jpeg')
+    } else {
+      url.searchParams.set('w', '560')
+      url.searchParams.set('h', '315')
+      url.searchParams.set('fit', 'cover')
+      url.searchParams.set('q', '48')
+      url.searchParams.set('format', 'jpeg')
+    }
+  }
+
+  return url.toString()
+}
+
+function rewriteBridgeArticleHtml(exportedHtml: string) {
+  const doc = new DOMParser().parseFromString(exportedHtml, 'text/html')
+
+  for (const image of doc.querySelectorAll<HTMLImageElement>('img')) {
+    const src = image.getAttribute('src')
+    if (!src) continue
+    image.setAttribute('src', rewriteBridgeImageUrl(src, 'content'))
+  }
+
+  return doc.body.innerHTML
+}
+
+export function buildWechatBridgeArticleExport(title: string, html: string) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    throw new Error('当前环境不支持公众号发布导出')
+  }
+
+  const { exportedHtml, normalizedTitle } = buildWechatClipboardHtml(title, html)
+
+  return {
+    normalizedTitle,
+    exportedHtml: rewriteBridgeArticleHtml(exportedHtml),
+  }
+}
+
+export function buildWechatBridgeCoverImageUrl(input: string) {
+  const normalized = input.trim()
+  if (!normalized) return ''
+
+  if (typeof window === 'undefined') {
+    throw new Error('当前环境不支持封面图处理')
+  }
+
+  return rewriteBridgeImageUrl(normalized, 'cover')
+}
+
+export function extractFirstWechatBridgeCoverImageUrl(html: string) {
+  if (typeof window === 'undefined') {
+    throw new Error('当前环境不支持封面图处理')
+  }
+
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const src = doc.querySelector('img')?.getAttribute('src') || ''
+  return src ? rewriteBridgeImageUrl(src, 'cover') : ''
+}
+
 function copyUsingExecCommand(html: string, plainText: string) {
   return new Promise<void>((resolve, reject) => {
     const textarea = document.createElement('textarea')

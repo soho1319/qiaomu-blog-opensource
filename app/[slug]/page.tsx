@@ -1,4 +1,4 @@
-import { getPostBySlug, incrementViewCount, isPubliclyAccessiblePost } from '@/lib/db'
+import { getPostBySlug, incrementViewCount, isPubliclyAccessiblePost, isSearchIndexablePost } from '@/lib/db'
 import { getAppCloudflareEnv } from '@/lib/cloudflare'
 import { verifyPassword } from '@/lib/password'
 import { notFound } from 'next/navigation'
@@ -32,22 +32,24 @@ export async function generateMetadata({
 
     const post = await getPostBySlug(env.DB, slug, getPublicContentCacheNamespace(env)).catch(() => null)
     if (!post || !isPubliclyAccessiblePost(post)) return {}
+    const searchIndexable = isSearchIndexablePost(post)
 
     // Extract first image from HTML for OG image
     const imgMatch = post.html?.match(/<img[^>]+src="([^"]+)"/)
     const ogImage = post.cover_image || imgMatch?.[1] || `${baseUrl}/icon-512.png`
 
-    // Password-protected articles should not be indexed
+    // Password-protected articles should not expose metadata to crawlers.
     if (post.password) {
       return {
         title: post.title,
-        robots: { index: false },
+        robots: { index: false, follow: false },
       }
     }
 
     return {
       title: post.title,
       description: post.description,
+      robots: searchIndexable ? undefined : { index: false, follow: false },
       authors: [{ name: '向阳乔木' }],
       alternates: {
         canonical: `${baseUrl}/${post.slug}`,
@@ -176,6 +178,7 @@ export default async function PostPage({
   // 阅读时间估算（中文按 400 字/分钟）
   const textLength = post.content?.length || 0
   const readingMinutes = Math.max(1, Math.ceil(textLength / 400))
+  const searchIndexable = isSearchIndexablePost(post)
   const related = !post.password
     ? await getRelatedPosts(db, env, post, 3).catch(() => ({ strategy: 'fts' as const, source: 'rules' as const, results: [] }))
     : { strategy: 'fts' as const, source: 'rules' as const, results: [] }
@@ -192,7 +195,7 @@ export default async function PostPage({
       />
 
       <main className="page-main mx-auto w-full max-w-3xl px-4 sm:px-6 flex-1 py-8 sm:py-12">
-        {!post.password && (() => {
+        {searchIndexable && (() => {
           const baseUrl = getSiteUrl()
           const imgMatch = post.html?.match(/<img[^>]+src="([^"]+)"/)
           const ogImage = post.cover_image || imgMatch?.[1] || `${baseUrl}/icon-512.png`
